@@ -1,1 +1,2 @@
 add_lunch_combo omni_lithium-eng
+add_lunch_combo omni_lithium-userdebug
