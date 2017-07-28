@@ -1,20 +1,59 @@
 # encryption support
-on init
-    chmod 0660 /dev/qseecom
-    chown system drmrpc /dev/qseecom
-    chmod 0664 /dev/ion
-    chown system system /dev/ion
-
-service qseecomd /sbin/qseecomd
+# separate copy needed to use /sbin/linker64 instead of /system/bin/linker64
+service sbinqseecomd /sbin/qseecomd
     oneshot
     disabled
     user root
     group root
     seclabel u:r:recovery:s0
 
-on property:ro.crypto.state=encrypted
-    start qseecomd
+service pulldecryptfiles /sbin/pulldecryptfiles.sh
+    oneshot
+    disabled
+    user root
+    group root
+    seclabel u:r:recovery:s0
 
+on early-init
+    mkdir /firmware 0771 system system
+    mount debugfs debugfs /sys/kernel/debug
+    chmod 0755 /sys/kernel/debug
+
+on fs
+    # needed to make qseecomd work in recovery
+    symlink /dev/block/platform/soc/624000.ufshc /dev/block/bootdevice
+    symlink /system/vendor /vendor
+    chmod 0660 /dev/qseecom
+    chown system drmrpc /dev/qseecom
+    chmod 0664 /dev/ion
+    chown system system /dev/ion
+
+    wait /dev/block/bootdevice/by-name/persist
+    mount ext4 /dev/block/bootdevice/by-name/persist /persist nosuid nodev barrier=1
+    restorecon_recursive /persist
+    mkdir /persist/data 0700 system system
+
+    wait /dev/block/bootdevice/by-name/dsp
+    mount ext4 /dev/block/bootdevice/by-name/dsp /dsp ro nosuid nodev barrier=1
+
+    wait /dev/block/bootdevice/by-name/modem
+    mount vfat /dev/block/bootdevice/by-name/modem /firmware ro shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:firmware_file:s0
+
+    symlink /firmware/image /vendor/firmware
+
+    # start pulldecryptfiles
+
+on post-fs
+    # start clearpad_post_probe when filesystem is available for fwflash
+
+on property:ro.crypto.state=encrypted
+    stop sbinqseecomd
+    start sbinqseecomd
+
+on property:ro.crypto.fs_crypto_blkdev=/dev/block/dm-0
+    stop sbinqseecomd
+
+# LOG
 service logd /system/bin/logd
     class core
     disabled
@@ -25,9 +64,11 @@ service logd /system/bin/logd
     group root system
     seclabel u:r:logd:s0
 
+# Governor
 on boot
     # save battery by switching to interactive once booted
     write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor interactive
     write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor interactive
     write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor interactive
     write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor interactive
+
