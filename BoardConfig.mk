@@ -29,6 +29,7 @@ AUDIO_FEATURE_ELLIPTIC_ULTRASOUND_SUPPORT := true
 
 # Kernel
 TARGET_KERNEL_CONFIG := lithium_defconfig
+TARGET_KERNEL_APPEND_DTB := true
 
 # Properties
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/system.prop
